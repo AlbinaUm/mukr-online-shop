@@ -8,3 +8,10 @@ export interface UserFields {
     password: string;
     __confirmPassword: string;
 }
+
+
+export interface Category {
+    id: string;
+    title: string;
+    description: string;
+}

@@ -1,31 +1,42 @@
-import {NextFunction, Request, Response} from 'express';
-import {UserFields} from "../types";
-import {HydratedDocument} from "mongoose";
-import User from "../models/User";
+// middleware/auth.ts
+import { Request, Response, NextFunction } from 'express';
+import mysqlDb from '../mysqlDb';
+import { RowDataPacket } from 'mysql2';
 
 export interface RequestWithUser extends Request {
-    user: HydratedDocument<UserFields>
+    user?: {
+        id: number;
+        role: string;
+    };
 }
 
-const auth = async (expressReq: Request, res: Response, next: NextFunction) => {
-    const req = expressReq as RequestWithUser;
-    const token = req.get('Authorization');
+export const auth = async (req: Request, res: Response, next: NextFunction) => {
+    const token = req.headers.authorization;
 
     if (!token) {
-        res.status(401).send({error: 'No token present'});
+        res.status(401).json({ error: 'Нет токена' });
         return;
     }
 
-    const user = await User.findOne({token});
+    try {
+        const connection = await mysqlDb.getConnection();
+        const [users] = await connection.query<RowDataPacket[]>(
+            'SELECT id, role FROM user WHERE token = ?',
+            [token]
+        );
 
-    if (!user) {
-        res.status(401).send({error: 'Wrong token'});
-        return;
+        if (users.length === 0) {
+            res.status(401).json({ error: 'Неверный токен' });
+            return;
+        }
+
+        (req as RequestWithUser).user = {
+            id: users[0].id,
+            role: users[0].role,
+        };
+
+        next();
+    } catch (e) {
+        next(e);
     }
-
-    req.user = user;
-
-    next();
 };
-
-export default auth;
